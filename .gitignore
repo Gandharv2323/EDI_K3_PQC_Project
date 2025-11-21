@@ -59,7 +59,7 @@ users.json
 *.bak
 
 # Additional ignores from attachments
-.env.example
+
 .dockerignore
 certs/
 react-chat-app/certs/
