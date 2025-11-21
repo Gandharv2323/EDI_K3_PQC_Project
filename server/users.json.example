@@ -1,0 +1,8 @@
+{
+  "users": [
+    {
+      "username": "example_user",
+      "password": "pbkdf2:sha256:600000$EXAMPLE_SALT_32_HEX_CHARS$EXAMPLE_HASH_64_HEX_CHARS"
+    }
+  ]
+}

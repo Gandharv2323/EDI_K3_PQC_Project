@@ -1,0 +1,329 @@
+/* Animation Components Styles */
+
+.animation-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.animation-message {
+    margin: 10px 0 0 0;
+    font-size: 16px;
+    font-weight: 500;
+    color: #333;
+    text-align: center;
+}
+
+.typing-animation-container {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    background: #f5f5f5;
+    border-radius: 20px;
+    max-width: fit-content;
+}
+
+.typing-text {
+    font-size: 14px;
+    color: #666;
+    font-style: italic;
+}
+
+/* Controllable Animation Styles */
+.controllable-animation {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.animation-controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.control-btn {
+    padding: 8px 16px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
+}
+
+.control-btn:hover {
+    background: #0056b3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+}
+
+.control-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
+}
+
+/* Hover Animation Styles */
+.hover-animation-wrapper {
+    cursor: pointer;
+    transition: transform 0.3s ease;
+    display: inline-block;
+}
+
+.hover-animation-wrapper:hover {
+    transform: scale(1.05);
+}
+
+/* Progress Animation Styles */
+.progress-animation-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    padding: 20px;
+}
+
+.progress-bar {
+    width: 100%;
+    max-width: 200px;
+    height: 8px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #007bff, #00d4ff);
+    transition: width 0.3s ease;
+    border-radius: 4px;
+}
+
+.progress-text {
+    font-size: 18px;
+    font-weight: bold;
+    color: #007bff;
+}
+
+/* Scroll Animation Styles */
+.scroll-animation-trigger {
+    min-height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Background Animation Styles */
+.background-animation-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.background-animation-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.background-animation-content {
+    position: relative;
+    z-index: 1;
+}
+
+/* Click Animation Styles */
+.click-animation-wrapper {
+    cursor: pointer;
+    display: inline-block;
+    transition: transform 0.1s ease;
+}
+
+.click-animation-wrapper:active {
+    transform: scale(0.95);
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    backdrop-filter: blur(5px);
+}
+
+.loading-overlay.dark {
+    background: rgba(0, 0, 0, 0.8);
+}
+
+/* Success Modal */
+.success-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 30px;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    z-index: 9999;
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+}
+
+.success-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 9998;
+    backdrop-filter: blur(3px);
+}
+
+/* Animation Button with Icon */
+.animated-button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 24px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.animated-button:hover {
+    background: #0056b3;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4);
+}
+
+.animated-button .button-animation {
+    width: 24px;
+    height: 24px;
+}
+
+/* Segment Control */
+.segment-control {
+    display: flex;
+    gap: 8px;
+    margin-top: 15px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.segment-btn {
+    padding: 6px 12px;
+    background: #f0f0f0;
+    color: #333;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s ease;
+}
+
+.segment-btn.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.segment-btn:hover {
+    border-color: #007bff;
+}
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+    .animation-container {
+        padding: 15px;
+    }
+
+    .control-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+
+    .success-modal {
+        padding: 20px;
+        max-width: 90%;
+    }
+
+    .animated-button {
+        padding: 10px 20px;
+        font-size: 14px;
+    }
+}
+
+/* Animation States */
+.animation-fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+.animation-slide-up {
+    animation: slideUp 0.5s ease-out;
+}
+
+.animation-scale-in {
+    animation: scaleIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(30px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}

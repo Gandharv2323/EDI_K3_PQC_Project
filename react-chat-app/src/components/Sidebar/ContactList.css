@@ -1,0 +1,25 @@
+.contact-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.empty-contacts {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+}
+
+.empty-contacts i {
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+.empty-contacts p {
+  font-size: 14px;
+  margin: 0;
+}
