@@ -208,23 +208,3 @@ User           React App           C++ Server             Other Client
 ```
 
 ---
-
-## Security & Credentials
-
-- Do **not** commit real credentials. Use `.env` files which are already ignored via `.gitignore`.
-- `users.json` in `server/` should only contain hashed passwords.
-- Read `server/CREDENTIALS_SECURITY.md` and `server/IMMEDIATE_ACTION_REQUIRED.md` carefully before deploying or sharing the project.
-
----
-
-## Future Improvements
-
-- Deployment-ready Docker setup for both server and client
-- Enhanced monitoring/logging views in the frontend
-- More advanced AI features (summarization, moderation, etc.)
-
----
-
-## License
-
-This project is for educational and demonstration purposes. Add your preferred license here if you plan to make it public/production-ready.
