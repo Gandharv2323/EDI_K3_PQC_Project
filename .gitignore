@@ -58,8 +58,13 @@ users.json
 *.backup
 *.bak
 
-# Additional ignores from attachments
 
+# Security & history cleanup artifacts
+server/users.json
+server/SecureChatServer_backup_*/
+SecureChatServer_backup_*/
+
+# Additional ignores from attachments
 .dockerignore
 certs/
 react-chat-app/certs/

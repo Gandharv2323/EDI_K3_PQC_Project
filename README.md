@@ -74,7 +74,7 @@ This project is a full-stack, end‑to‑end **secure chat application** built a
 1. Open a terminal in the project root:
 
 ```powershell
-cd "C:\Users\sidde\OneDrive\Desktop\FSD\SecureChatServer\server"
+cd "    "
 ```
 
 2. Configure and build with CMake:
@@ -92,9 +92,6 @@ cmake --build build
 cd build
 ./chat_server   # or the generated executable name
 ```
-
-> **Note:** See `server/CREDENTIALS_SECURITY.md` and `server/IMMEDIATE_ACTION_REQUIRED.md` for important security notes.
-
 ---
 
 ## Frontend Setup (`react-chat-app/`)
