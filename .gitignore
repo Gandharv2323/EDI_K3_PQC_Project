@@ -65,6 +65,8 @@ server/SecureChatServer_backup_*/
 SecureChatServer_backup_*/
 
 # Additional ignores from attachments
-.dockerignore
+*.dockerignore
+*.gitignore
+test-login
 certs/
 react-chat-app/certs/
