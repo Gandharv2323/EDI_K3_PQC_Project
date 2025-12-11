@@ -31,6 +31,50 @@
   flex-shrink: 0;
 }
 
+/* ============================================================================
+   PRESENCE INDICATOR STYLES
+   ============================================================================ */
+.presence-indicator {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--bg-card);
+  border-radius: 50%;
+  background: #666; /* Default: unknown/offline */
+  transition: all 0.3s ease;
+}
+
+/* Online - Green */
+.presence-indicator.online {
+  background: var(--primary-color, #00d9a3);
+  box-shadow: 0 0 6px rgba(0, 217, 163, 0.5);
+}
+
+/* Idle/Away - Yellow/Orange */
+.presence-indicator.idle {
+  background: #f5a623;
+  box-shadow: 0 0 6px rgba(245, 166, 35, 0.5);
+  animation: idle-pulse 2s ease-in-out infinite;
+}
+
+@keyframes idle-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Offline - Gray */
+.presence-indicator.offline {
+  background: #666;
+  box-shadow: none;
+}
+
+/* Legacy online-indicator (for backwards compatibility) */
 .online-indicator {
   position: absolute;
   bottom: 2px;

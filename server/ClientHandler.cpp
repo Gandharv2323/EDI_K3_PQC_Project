@@ -5,6 +5,11 @@
 #include "password_hash.h"
 #include <sstream>
 #include <iostream>
+#include <openssl/rand.h>
+#include <openssl/evp.h>
+#include <openssl/kdf.h>
+
+// commands
 
 ClientHandler::ClientHandler(int clientSocket, Server* srv) 
     : connection(std::make_unique<Connection>()), 
@@ -185,57 +190,44 @@ void ClientHandler::run(std::shared_ptr<ClientHandler> self) {
         return;
     }
     
-    std::cout << "[CLIENT] Authentication successful, starting key derivation" << std::endl;
-    // SECURITY: Perform authenticated key derivation instead of sending plaintext key
-    // The session key is now derived from:
-    // 1. The user's authenticated identity (prevents key reuse across users)
-    // 2. A random nonce (prevents replay attacks)
-    // 3. PBKDF2 with sufficient iterations (cryptographically secure derivation)
+    std::cout << "[CLIENT] Authentication successful, enabling encryption" << std::endl;
     
+    // Use NONCE-based key derivation for session key
+    // The session key was generated in constructor - just enable encryption
     std::string username = user->getUsername();
     
-    // Generate a random nonce for this session (public - does not compromise security)
-    std::string nonce = EncryptionEnhanced::generateNonce(16);
-    std::vector<unsigned char> nonceVec(nonce.begin(), nonce.end());
-    std::string nonceB64 = EncryptionEnhanced::base64Encode(nonceVec);
-    
-    // Send nonce to bridge (does not compromise security - nonce is public)
-    connection->sendRaw("NONCE:" + nonceB64 + "\n");
-    std::cout << "[CRYPTO] Sent public nonce to bridge" << std::endl;
-    
-    // Derive session key from authenticated username + nonce using PBKDF2
-    // This ensures:
-    // - Only the authenticated user can derive the correct key
-    // - Each session gets a unique key (due to random nonce)
-    // - Key derivation is deterministic on both server and bridge
-    std::string keyMaterial = username + nonce;
-    std::string derivedKeyHex = EncryptionEnhanced::deriveKey(keyMaterial, "SECURECHAT_SESSION_SALT");
-    
-    // Convert hex string (64 chars) to binary (32 bytes)
-    // deriveKey returns hex-encoded key, but setSessionKeyFromString expects raw bytes
-    if (derivedKeyHex.length() != 64) {
-        std::cerr << "[CRYPTO] ERROR: Derived key has invalid length: " << derivedKeyHex.length() << std::endl;
+    // Generate a random nonce and send to bridge for key derivation
+    std::vector<unsigned char> nonce(16);
+    if (!RAND_bytes(nonce.data(), 16)) {
+        std::cerr << "[CRYPTO] ERROR: Failed to generate nonce" << std::endl;
         return;
     }
     
-    std::string derivedKey;
-    derivedKey.reserve(32);
-    for (size_t i = 0; i < 64; i += 2) {
-        unsigned int byte;
-        std::stringstream ss;
-        ss << std::hex << derivedKeyHex.substr(i, 2);
-        ss >> byte;
-        derivedKey.push_back(static_cast<char>(byte));
+    // Send nonce to bridge
+    std::string nonceB64 = EncryptionEnhanced::base64Encode(nonce);
+    connection->sendRaw("NONCE:" + nonceB64 + "\n");
+    std::cout << "[CRYPTO] Sent NONCE to bridge for key derivation" << std::endl;
+    
+    // Derive session key from username + nonce (must match bridge's derivation)
+    std::string keyMaterial = username + std::string(nonce.begin(), nonce.end());
+    std::string salt = "SECURECHAT_SESSION_SALT";
+    
+    // Use PBKDF2 to derive the session key (100000 iterations, 32 bytes output)
+    std::vector<unsigned char> derivedKey(32);
+    if (PKCS5_PBKDF2_HMAC(keyMaterial.c_str(), keyMaterial.length(),
+                          reinterpret_cast<const unsigned char*>(salt.c_str()), salt.length(),
+                          100000, EVP_sha256(), 32, derivedKey.data()) != 1) {
+        std::cerr << "[CRYPTO] ERROR: Failed to derive session key" << std::endl;
+        return;
     }
     
-    // Update connection with derived key (now using secure storage)
-    connection->setSessionKeyFromString(derivedKey);
+    // Set the derived key
+    connection->setSessionKeyFromString(std::string(derivedKey.begin(), derivedKey.end()));
     
-    // Enable encryption - key is now in place
+    // Enable encryption
     connection->enableEncryption(true);
     std::string sessionId = connection->getSessionKeyHex(8);
-    std::cout << "[CRYPTO] Encryption enabled for session: " << sessionId << std::endl;
-    std::cout << "[CRYPTO] ✓ Authenticated key agreement completed" << std::endl;
+    std::cout << "[CRYPTO] ✓ Encryption enabled, session: " << sessionId << std::endl;
     
     server->registerClient(user->getUsername(), self);
     

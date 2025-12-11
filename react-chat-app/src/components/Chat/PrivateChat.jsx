@@ -23,7 +23,7 @@ const PrivateChat = () => {
   }, [selectedContact])
 
   const messages = selectedContact
-    ? privateMessages[selectedContact.username] || []
+    ? privateMessages[selectedContact.username.toLowerCase()] || []
     : []
 
   if (!selectedContact) {

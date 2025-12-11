@@ -184,7 +184,7 @@ const Login = () => {
           </div>
         </form>
 
-        <div className="test-accounts">
+        {/* <div className="test-accounts">
           <h4>
             <i className="fas fa-info-circle"></i>
             Test Accounts
@@ -228,7 +228,7 @@ const Login = () => {
               Use
             </button>
           </div>
-        </div>
+        </div> */}
       </div>
     </div>
   )

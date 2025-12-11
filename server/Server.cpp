@@ -218,6 +218,9 @@ void Server::reloadUsers() {
     std::cout << "[INFO] Reloaded " << validUsers.size() << " users from " << usersFilePath << std::endl;
 }
 
+//  Connection Code 1️ C++ SERVER (Backend)
+
+
 bool Server::start() {
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket < 0) {

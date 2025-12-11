@@ -7,10 +7,10 @@ import './ContactItem.css'
 
 const ContactItem = ({ contact }) => {
   const navigate = useNavigate()
-  const { selectedContact, setSelectedContact, privateMessages } = useChat()
+  const { selectedContact, setSelectedContact, privateMessages, presenceEnabled } = useChat()
   const isSelected = selectedContact?.id === contact.id
 
-  const messages = privateMessages[contact.username] || []
+  const messages = privateMessages[contact.username.toLowerCase()] || []
   const lastMessage = messages[messages.length - 1]
   const unreadCount = messages.filter((m) => !m.read && !m.isSent).length
 
@@ -45,6 +45,40 @@ const ContactItem = ({ contact }) => {
     }
   }
 
+  // Get presence indicator class
+  const getPresenceClass = () => {
+    if (contact.isAI) return 'online' // AI is always online
+    if (!presenceEnabled) return contact.online ? 'online' : ''
+    
+    switch (contact.presenceStatus) {
+      case 'online': return 'online'
+      case 'idle': return 'idle'
+      case 'offline': return 'offline'
+      default: return ''
+    }
+  }
+
+  // Get presence tooltip
+  const getPresenceTooltip = () => {
+    if (contact.isAI) return 'AI Assistant - Always available'
+    if (!presenceEnabled) return contact.online ? 'Online' : 'Offline'
+    
+    switch (contact.presenceStatus) {
+      case 'online': return 'Online'
+      case 'idle': return 'Away'
+      case 'offline': 
+        if (contact.lastSeen) {
+          try {
+            return `Last seen ${formatDistanceToNow(new Date(contact.lastSeen), { addSuffix: true })}`
+          } catch {
+            return 'Offline'
+          }
+        }
+        return 'Offline'
+      default: return 'Unknown'
+    }
+  }
+
   return (
     <div
       className={`contact-item ${isSelected ? 'selected' : ''} ${contact.isAI ? 'ai-contact' : ''} transition-all hover-lift`}
@@ -56,7 +90,10 @@ const ContactItem = ({ contact }) => {
         ) : (
           <i className="fas fa-user"></i>
         )}
-        {contact.online && <span className="online-indicator"></span>}
+        <span 
+          className={`presence-indicator ${getPresenceClass()}`}
+          title={getPresenceTooltip()}
+        ></span>
       </div>
       
       <div className="contact-info">

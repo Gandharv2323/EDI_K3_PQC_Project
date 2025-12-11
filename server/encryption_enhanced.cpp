@@ -968,3 +968,550 @@ std::string EncryptionEnhanced::deriveKey(const std::string& passphrase, const s
  *    - Never expose partial plaintext on auth failure
  *    - Safe defaults (fail closed, not open)
  */
+
+// ============================================
+// Post-Quantum Cryptography (PQC) Implementation
+// ============================================
+
+#include "pq_kem.h"
+#include "pq_sign.h"
+
+// ============================================
+// Kyber-768 KEM Functions
+// ============================================
+
+bool EncryptionEnhanced::pqGenerateKeyPair(std::string& publicKey, std::string& secretKey) {
+    try {
+        pqc::KyberKEM kem;
+        auto keyPairOpt = kem.generateKeyPair();
+        
+        if (!keyPairOpt) {
+            std::cerr << "[CRYPTO-PQC] Kyber keypair generation failed" << std::endl;
+            return false;
+        }
+        
+        publicKey = keyPairOpt->publicKey.toString();
+        secretKey = keyPairOpt->secretKey.toString();
+        
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "[CRYPTO-PQC] Exception in pqGenerateKeyPair: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool EncryptionEnhanced::pqEncapsulate(const std::string& publicKey,
+                                        std::string& ciphertext,
+                                        std::string& sharedSecret) {
+    try {
+        if (publicKey.size() != PQ_PUBLIC_KEY_SIZE) {
+            std::cerr << "[CRYPTO-PQC] Invalid public key size: " << publicKey.size() 
+                      << " (expected " << PQ_PUBLIC_KEY_SIZE << ")" << std::endl;
+            return false;
+        }
+        
+        pqc::KyberKEM kem;
+        auto resultOpt = kem.encapsulate(publicKey);
+        
+        if (!resultOpt) {
+            std::cerr << "[CRYPTO-PQC] Encapsulation failed" << std::endl;
+            return false;
+        }
+        
+        ciphertext = resultOpt->ciphertext.toString();
+        sharedSecret = resultOpt->sharedSecret.toString();
+        
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "[CRYPTO-PQC] Exception in pqEncapsulate: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool EncryptionEnhanced::pqDecapsulate(const std::string& ciphertext,
+                                        const std::string& secretKey,
+                                        std::string& sharedSecret) {
+    try {
+        if (ciphertext.size() != PQ_CIPHERTEXT_SIZE) {
+            std::cerr << "[CRYPTO-PQC] Invalid ciphertext size: " << ciphertext.size() 
+                      << " (expected " << PQ_CIPHERTEXT_SIZE << ")" << std::endl;
+            return false;
+        }
+        
+        if (secretKey.size() != PQ_SECRET_KEY_SIZE) {
+            std::cerr << "[CRYPTO-PQC] Invalid secret key size: " << secretKey.size() 
+                      << " (expected " << PQ_SECRET_KEY_SIZE << ")" << std::endl;
+            return false;
+        }
+        
+        pqc::KyberKEM kem;
+        auto resultOpt = kem.decapsulate(ciphertext, secretKey);
+        
+        if (!resultOpt) {
+            std::cerr << "[CRYPTO-PQC] Decapsulation failed" << std::endl;
+            return false;
+        }
+        
+        sharedSecret = resultOpt->toString();
+        
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "[CRYPTO-PQC] Exception in pqDecapsulate: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+std::string EncryptionEnhanced::pqDeriveSessionKey(const std::string& sharedSecret,
+                                                    const std::string& context) {
+    try {
+        if (sharedSecret.size() != PQ_SHARED_SECRET_SIZE) {
+            std::cerr << "[CRYPTO-PQC] Invalid shared secret size: " << sharedSecret.size() 
+                      << " (expected " << PQ_SHARED_SECRET_SIZE << ")" << std::endl;
+            return "";
+        }
+        
+        pqc::SecureBuffer key = pqc::deriveAESKeyFromSharedSecret(
+            reinterpret_cast<const uint8_t*>(sharedSecret.data()),
+            sharedSecret.size(),
+            context
+        );
+        
+        if (key.size() != 32) {
+            std::cerr << "[CRYPTO-PQC] Key derivation failed" << std::endl;
+            return "";
+        }
+        
+        return key.toString();
+    } catch (const std::exception& e) {
+        std::cerr << "[CRYPTO-PQC] Exception in pqDeriveSessionKey: " << e.what() << std::endl;
+        return "";
+    }
+}
+
+bool EncryptionEnhanced::pqInitiateKeyExchange(std::string& publicKey, std::string& secretKey) {
+    return pqGenerateKeyPair(publicKey, secretKey);
+}
+
+bool EncryptionEnhanced::pqCompleteKeyExchange(const std::string& ciphertext,
+                                                const std::string& secretKey,
+                                                std::string& sessionKey) {
+    std::string sharedSecret;
+    
+    if (!pqDecapsulate(ciphertext, secretKey, sharedSecret)) {
+        return false;
+    }
+    
+    sessionKey = pqDeriveSessionKey(sharedSecret);
+    
+    // Securely clear the shared secret
+    volatile char* p = const_cast<volatile char*>(sharedSecret.data());
+    for (size_t i = 0; i < sharedSecret.size(); i++) {
+        p[i] = 0;
+    }
+    
+    return !sessionKey.empty();
+}
+
+// ============================================
+// PQC Hybrid Encryption (Kyber + AES-256-GCM)
+// ============================================
+
+std::string EncryptionEnhanced::pqHybridEncrypt(const std::string& plaintext,
+                                                 const std::string& recipientPublicKey,
+                                                 const std::string& aad) {
+    try {
+        // Step 1: Validate recipient's public key
+        if (recipientPublicKey.size() != PQ_PUBLIC_KEY_SIZE) {
+            std::cerr << "[CRYPTO-PQC] Invalid recipient public key size" << std::endl;
+            return "";
+        }
+        
+        // Step 2: Encapsulate to get ciphertext and shared secret
+        std::string kemCiphertext;
+        std::string sharedSecret;
+        
+        if (!pqEncapsulate(recipientPublicKey, kemCiphertext, sharedSecret)) {
+            std::cerr << "[CRYPTO-PQC] Hybrid encryption: encapsulation failed" << std::endl;
+            return "";
+        }
+        
+        // Step 3: Derive AES-256 session key from shared secret
+        std::string aesKey = pqDeriveSessionKey(sharedSecret, "HYBRID-AES-256-GCM-KEY");
+        
+        // Clear shared secret
+        volatile char* p = const_cast<volatile char*>(sharedSecret.data());
+        for (size_t i = 0; i < sharedSecret.size(); i++) {
+            p[i] = 0;
+        }
+        
+        if (aesKey.empty()) {
+            std::cerr << "[CRYPTO-PQC] Hybrid encryption: key derivation failed" << std::endl;
+            return "";
+        }
+        
+        // Step 4: Generate random IV for AES-GCM
+        std::string iv = generateIV();
+        if (iv.size() != 12) {
+            std::cerr << "[CRYPTO-PQC] Hybrid encryption: IV generation failed" << std::endl;
+            return "";
+        }
+        
+        // Step 5: Encrypt plaintext with AES-256-GCM
+        std::string aesCiphertext = encryptAES_GCM(
+            plaintext,
+            reinterpret_cast<const unsigned char*>(aesKey.data()), aesKey.size(),
+            reinterpret_cast<const unsigned char*>(iv.data()), iv.size(),
+            reinterpret_cast<const unsigned char*>(aad.data()), aad.size()
+        );
+        
+        // Clear AES key
+        volatile char* pk = const_cast<volatile char*>(aesKey.data());
+        for (size_t i = 0; i < aesKey.size(); i++) {
+            pk[i] = 0;
+        }
+        
+        if (aesCiphertext.empty()) {
+            std::cerr << "[CRYPTO-PQC] Hybrid encryption: AES encryption failed" << std::endl;
+            return "";
+        }
+        
+        // Step 6: Combine: KEM ciphertext + AES ciphertext (already Base64)
+        // Format: Base64(kemCiphertext) + "." + aesCiphertext(already Base64)
+        std::vector<unsigned char> kemCtVec(kemCiphertext.begin(), kemCiphertext.end());
+        std::string kemCtB64 = base64Encode(kemCtVec);
+        
+        return kemCtB64 + "." + aesCiphertext;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "[CRYPTO-PQC] Exception in pqHybridEncrypt: " << e.what() << std::endl;
+        return "";
+    }
+}
+
+std::string EncryptionEnhanced::pqHybridDecrypt(const std::string& ciphertext_b64,
+                                                 const std::string& recipientSecretKey,
+                                                 const std::string& aad) {
+    try {
+        // Step 1: Split KEM ciphertext and AES ciphertext
+        size_t dotPos = ciphertext_b64.find('.');
+        if (dotPos == std::string::npos) {
+            std::cerr << "[CRYPTO-PQC] Hybrid decryption: invalid format (no separator)" << std::endl;
+            return "";
+        }
+        
+        std::string kemCtB64 = ciphertext_b64.substr(0, dotPos);
+        std::string aesCiphertext = ciphertext_b64.substr(dotPos + 1);
+        
+        // Step 2: Decode KEM ciphertext
+        std::vector<unsigned char> kemCiphertextVec = base64Decode(kemCtB64);
+        std::string kemCiphertext(kemCiphertextVec.begin(), kemCiphertextVec.end());
+        
+        if (kemCiphertext.size() != PQ_CIPHERTEXT_SIZE) {
+            std::cerr << "[CRYPTO-PQC] Hybrid decryption: invalid KEM ciphertext size" << std::endl;
+            return "";
+        }
+        
+        // Step 3: Validate secret key
+        if (recipientSecretKey.size() != PQ_SECRET_KEY_SIZE) {
+            std::cerr << "[CRYPTO-PQC] Hybrid decryption: invalid secret key size" << std::endl;
+            return "";
+        }
+        
+        // Step 4: Decapsulate to recover shared secret
+        std::string sharedSecret;
+        if (!pqDecapsulate(kemCiphertext, recipientSecretKey, sharedSecret)) {
+            std::cerr << "[CRYPTO-PQC] Hybrid decryption: decapsulation failed" << std::endl;
+            return "";
+        }
+        
+        // Step 5: Derive AES-256 session key
+        std::string aesKey = pqDeriveSessionKey(sharedSecret, "HYBRID-AES-256-GCM-KEY");
+        
+        // Clear shared secret
+        volatile char* p = const_cast<volatile char*>(sharedSecret.data());
+        for (size_t i = 0; i < sharedSecret.size(); i++) {
+            p[i] = 0;
+        }
+        
+        if (aesKey.empty()) {
+            std::cerr << "[CRYPTO-PQC] Hybrid decryption: key derivation failed" << std::endl;
+            return "";
+        }
+        
+        // Step 6: Decrypt with AES-256-GCM
+        std::string plaintext = decryptAES_GCM(
+            aesCiphertext,
+            reinterpret_cast<const unsigned char*>(aesKey.data()), aesKey.size(),
+            reinterpret_cast<const unsigned char*>(aad.data()), aad.size()
+        );
+        
+        // Clear AES key
+        volatile char* pk = const_cast<volatile char*>(aesKey.data());
+        for (size_t i = 0; i < aesKey.size(); i++) {
+            pk[i] = 0;
+        }
+        
+        return plaintext;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "[CRYPTO-PQC] Exception in pqHybridDecrypt: " << e.what() << std::endl;
+        return "";
+    }
+}
+
+// ============================================
+// Dilithium-III Digital Signatures
+// ============================================
+
+bool EncryptionEnhanced::pqSignGenerateKeyPair(std::string& publicKey, std::string& secretKey) {
+    try {
+        pqc::DilithiumSign signer;
+        auto keyPairOpt = signer.generateKeyPair();
+        
+        if (!keyPairOpt) {
+            std::cerr << "[CRYPTO-PQC] Dilithium keypair generation failed" << std::endl;
+            return false;
+        }
+        
+        publicKey = keyPairOpt->publicKey.toString();
+        secretKey = keyPairOpt->secretKey.toString();
+        
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "[CRYPTO-PQC] Exception in pqSignGenerateKeyPair: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool EncryptionEnhanced::pqSign(const std::string& message,
+                                 const std::string& secretKey,
+                                 std::string& signature) {
+    try {
+        if (secretKey.size() != PQ_SIGN_SECRET_KEY_SIZE) {
+            std::cerr << "[CRYPTO-PQC] Invalid signing key size: " << secretKey.size() 
+                      << " (expected " << PQ_SIGN_SECRET_KEY_SIZE << ")" << std::endl;
+            return false;
+        }
+        
+        pqc::DilithiumSign signer;
+        pqc::SecureBuffer sk(secretKey.size());
+        std::memcpy(sk.data(), secretKey.data(), secretKey.size());
+        
+        auto sigOpt = signer.sign(message, sk);
+        
+        if (!sigOpt) {
+            std::cerr << "[CRYPTO-PQC] Signing failed" << std::endl;
+            return false;
+        }
+        
+        signature = sigOpt->toString();
+        return true;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "[CRYPTO-PQC] Exception in pqSign: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool EncryptionEnhanced::pqVerify(const std::string& message,
+                                   const std::string& signature,
+                                   const std::string& publicKey) {
+    try {
+        if (publicKey.size() != PQ_SIGN_PUBLIC_KEY_SIZE) {
+            std::cerr << "[CRYPTO-PQC] Invalid verification key size: " << publicKey.size() 
+                      << " (expected " << PQ_SIGN_PUBLIC_KEY_SIZE << ")" << std::endl;
+            return false;
+        }
+        
+        if (signature.size() > PQ_SIGNATURE_SIZE) {
+            std::cerr << "[CRYPTO-PQC] Invalid signature size: " << signature.size() << std::endl;
+            return false;
+        }
+        
+        pqc::DilithiumSign signer;
+        pqc::SecureBuffer sig(signature.size());
+        std::memcpy(sig.data(), signature.data(), signature.size());
+        
+        pqc::SecureBuffer pk(publicKey.size());
+        std::memcpy(pk.data(), publicKey.data(), publicKey.size());
+        
+        return signer.verify(message, sig, pk);
+        
+    } catch (const std::exception& e) {
+        std::cerr << "[CRYPTO-PQC] Exception in pqVerify: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+std::string EncryptionEnhanced::pqSignThenEncrypt(const std::string& plaintext,
+                                                   const std::string& senderSigningKey,
+                                                   const std::string& recipientEncryptionKey) {
+    try {
+        // Step 1: Sign the message
+        std::string signature;
+        if (!pqSign(plaintext, senderSigningKey, signature)) {
+            std::cerr << "[CRYPTO-PQC] Sign-then-encrypt: signing failed" << std::endl;
+            return "";
+        }
+        
+        // Step 2: Create signed blob: [4-byte sig length][signature][message]
+        std::vector<unsigned char> signedBlob;
+        uint32_t sigLen = static_cast<uint32_t>(signature.size());
+        
+        // Big-endian signature length
+        signedBlob.push_back((sigLen >> 24) & 0xFF);
+        signedBlob.push_back((sigLen >> 16) & 0xFF);
+        signedBlob.push_back((sigLen >> 8) & 0xFF);
+        signedBlob.push_back(sigLen & 0xFF);
+        
+        // Append signature
+        signedBlob.insert(signedBlob.end(), signature.begin(), signature.end());
+        
+        // Append message
+        signedBlob.insert(signedBlob.end(), plaintext.begin(), plaintext.end());
+        
+        // Step 3: Encrypt the signed blob with hybrid encryption
+        std::string signedBlobStr(signedBlob.begin(), signedBlob.end());
+        return pqHybridEncrypt(signedBlobStr, recipientEncryptionKey, "signed-message");
+        
+    } catch (const std::exception& e) {
+        std::cerr << "[CRYPTO-PQC] Exception in pqSignThenEncrypt: " << e.what() << std::endl;
+        return "";
+    }
+}
+
+std::string EncryptionEnhanced::pqDecryptThenVerify(const std::string& ciphertext_b64,
+                                                     const std::string& recipientDecryptionKey,
+                                                     const std::string& senderVerificationKey) {
+    try {
+        // Step 1: Decrypt the hybrid ciphertext
+        std::string signedBlobStr = pqHybridDecrypt(ciphertext_b64, recipientDecryptionKey, "signed-message");
+        
+        if (signedBlobStr.empty()) {
+            std::cerr << "[CRYPTO-PQC] Decrypt-then-verify: decryption failed" << std::endl;
+            return "";
+        }
+        
+        // Step 2: Parse signed blob
+        if (signedBlobStr.size() < 5) {  // Minimum: 4 bytes length + 1 byte
+            std::cerr << "[CRYPTO-PQC] Decrypt-then-verify: signed blob too short" << std::endl;
+            return "";
+        }
+        
+        const unsigned char* data = reinterpret_cast<const unsigned char*>(signedBlobStr.data());
+        
+        // Read signature length (big-endian)
+        uint32_t sigLen = (static_cast<uint32_t>(data[0]) << 24) |
+                          (static_cast<uint32_t>(data[1]) << 16) |
+                          (static_cast<uint32_t>(data[2]) << 8) |
+                          static_cast<uint32_t>(data[3]);
+        
+        if (sigLen > PQ_SIGNATURE_SIZE || sigLen + 4 > signedBlobStr.size()) {
+            std::cerr << "[CRYPTO-PQC] Decrypt-then-verify: invalid signature length" << std::endl;
+            return "";
+        }
+        
+        // Extract signature
+        std::string signature(signedBlobStr.begin() + 4, signedBlobStr.begin() + 4 + sigLen);
+        
+        // Extract message
+        std::string message(signedBlobStr.begin() + 4 + sigLen, signedBlobStr.end());
+        
+        // Step 3: Verify signature
+        if (!pqVerify(message, signature, senderVerificationKey)) {
+            std::cerr << "[CRYPTO-PQC] Decrypt-then-verify: signature verification FAILED" << std::endl;
+            return "";
+        }
+        
+        return message;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "[CRYPTO-PQC] Exception in pqDecryptThenVerify: " << e.what() << std::endl;
+        return "";
+    }
+}
+
+// ============================================
+// SHA3-256 Hash Function
+// ============================================
+
+std::string EncryptionEnhanced::sha3_256(const std::string& input) {
+    pqc::SecureBuffer hash = pqc::sha3_256(input);
+    
+    if (hash.size() != 32) {
+        std::cerr << "[CRYPTO-PQC] SHA3-256 hash failed" << std::endl;
+        return "";
+    }
+    
+    // Convert to hexadecimal string
+    std::stringstream ss;
+    for (size_t i = 0; i < hash.size(); i++) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash.data()[i];
+    }
+    return ss.str();
+}
+
+std::string EncryptionEnhanced::sha3_256_raw(const std::string& input) {
+    pqc::SecureBuffer hash = pqc::sha3_256(input);
+    
+    if (hash.size() != 32) {
+        std::cerr << "[CRYPTO-PQC] SHA3-256 hash failed" << std::endl;
+        return "";
+    }
+    
+    return hash.toString();
+}
+
+// ============================================
+// PQC Availability Checks
+// ============================================
+
+bool EncryptionEnhanced::isPQCKEMAvailable() {
+    return pqc::KyberKEM::isAvailable();
+}
+
+bool EncryptionEnhanced::isPQCSignAvailable() {
+    return pqc::DilithiumSign::isAvailable();
+}
+
+/**
+ * Post-Quantum Cryptography Implementation Notes:
+ * 
+ * 1. Kyber-768 KEM:
+ *    - NIST Security Level 3 (~AES-192 equivalent)
+ *    - Public key: 1184 bytes
+ *    - Secret key: 2400 bytes
+ *    - Ciphertext: 1088 bytes
+ *    - Shared secret: 32 bytes
+ *    - Based on Module-Learning-With-Errors (MLWE) problem
+ * 
+ * 2. Dilithium-III Signatures:
+ *    - NIST Security Level 3
+ *    - Public key: 1952 bytes
+ *    - Secret key: 4000 bytes
+ *    - Signature: ~3293 bytes (variable)
+ *    - Based on Module-Learning-With-Errors (MLWE) problem
+ * 
+ * 3. Hybrid Encryption Flow:
+ *    a. Key Exchange:
+ *       - Server generates Kyber keypair
+ *       - Server sends public key to client
+ *       - Client encapsulates → (ciphertext, shared_secret)
+ *       - Client sends ciphertext to server
+ *       - Server decapsulates → shared_secret
+ *       - Both derive AES-256 key: SHA3-256(shared_secret || context)
+ *    
+ *    b. Message Encryption:
+ *       - Encrypt with AES-256-GCM using derived key
+ *       - Output: KEM_ciphertext + "." + AES_ciphertext
+ * 
+ * 4. Security Considerations:
+ *    - Use fresh keypairs for forward secrecy
+ *    - Shared secrets cleared from memory after use
+ *    - Domain separation in key derivation (context string)
+ *    - Sign-then-encrypt provides authenticity + confidentiality
+ * 
+ * 5. Dependencies:
+ *    - liboqs >= 0.8.0 for Kyber/Dilithium
+ *    - OpenSSL >= 3.0 for SHA3-256 and AES-GCM
+ */

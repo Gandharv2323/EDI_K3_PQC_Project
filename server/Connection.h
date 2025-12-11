@@ -1,6 +1,6 @@
 #ifndef CONNECTION_H
 #define CONNECTION_H
-
+// heder files
 #include <string>
 #include <vector>
 #include <cstring>
@@ -172,9 +172,6 @@ protected:
     bool allowPlaintextFallback;  // Configuration flag: if true, fallback to plaintext on encryption failure; if false, fail hard
     SecureKeyBuffer sessionKey;  // Secure key storage - empty initially (default constructor)
      
-    // Low-level receive (raw bytes)
-    std::string receiveRaw();
-    
 public:
     Connection();
     virtual ~Connection();
@@ -184,6 +181,9 @@ public:
     
     // Low-level send (raw bytes) - public for session key transmission
     bool sendRaw(const std::string& data);
+    
+    // Low-level receive (raw bytes) - public for PQC key exchange
+    std::string receiveRaw();
     
     // High-level send/receive (with encryption)
     bool sendData(const std::string& data);

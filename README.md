@@ -1,4 +1,4 @@
-# OOPs Project K11 – Socket-based Secure Chat App
+# EDI G-6 Project – Chat App
 
 This project is a full-stack, end‑to‑end **secure chat application** built as an OOP (Object-Oriented Programming) project. It combines a C++ socket server for secure message handling with a modern React-based chat UI and Supabase-backed authentication.
 

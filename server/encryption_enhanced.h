@@ -3,7 +3,20 @@
 
 #include <string>
 #include <vector>
- 
+#include <optional>
+#include <memory>
+#include <cstdint>
+
+// Forward declarations for PQC types
+namespace pqc {
+    class SecureBuffer;
+    class KyberKEM;
+    class DilithiumSign;
+    struct KyberKeyPair;
+    struct DilithiumKeyPair;
+    struct EncapsulationResult;
+}
+
 /**
  * Enhanced Encryption Class
  * 
@@ -13,11 +26,22 @@
  * - PBKDF2-HMAC-SHA256 for key derivation (NIST SP 800-132)
  * - Cryptographically secure random generation
  * 
+ * Post-Quantum Cryptography (PQC) Extensions (v3.0):
+ * - Kyber-768 (NIST ML-KEM) for quantum-resistant key encapsulation
+ * - Dilithium-III (NIST ML-DSA) for quantum-resistant digital signatures
+ * - Hybrid encryption combining PQC key exchange with AES-256-GCM
+ * 
  * Security Properties:
  * - Confidentiality: AES-256 (~2^256 brute-force resistance)
  * - Authenticity: GCM tag prevents tampering
- * - Integrity: SHA-256 hash verification
+ * - Integrity: SHA-256/SHA3-256 hash verification
  * - Key Derivation: PBKDF2 with 200k iterations (OWASP 2023)
+ * - Quantum Resistance: Kyber-768 provides NIST Level 3 security
+ * 
+ * References:
+ * - NIST FIPS 203: ML-KEM (Kyber)
+ * - NIST FIPS 204: ML-DSA (Dilithium)
+ * - NIST SP 800-38D: GCM Specification
  */
 class EncryptionEnhanced {
 private:
@@ -423,6 +447,283 @@ public:
      * @return Random data (hex string)
      */
     static std::string generateNonce(size_t size);
+    
+    // ============================================
+    // Post-Quantum Cryptography (PQC) - Kyber-768 KEM
+    // ============================================
+    
+    /**
+     * @brief Kyber-768 public key size in bytes
+     */
+    static constexpr size_t PQ_PUBLIC_KEY_SIZE = 1184;
+    
+    /**
+     * @brief Kyber-768 secret key size in bytes
+     */
+    static constexpr size_t PQ_SECRET_KEY_SIZE = 2400;
+    
+    /**
+     * @brief Kyber-768 ciphertext size in bytes
+     */
+    static constexpr size_t PQ_CIPHERTEXT_SIZE = 1088;
+    
+    /**
+     * @brief Kyber-768 shared secret size in bytes
+     */
+    static constexpr size_t PQ_SHARED_SECRET_SIZE = 32;
+    
+    /**
+     * @brief Generate Kyber-768 keypair for PQC key exchange
+     * 
+     * Generates a fresh public/secret keypair using CRYSTALS-Kyber-768.
+     * The public key can be shared; the secret key must remain private.
+     * 
+     * @param publicKey Output buffer for public key (1184 bytes)
+     * @param secretKey Output buffer for secret key (2400 bytes)
+     * @return true on success, false on failure
+     */
+    static bool pqGenerateKeyPair(std::string& publicKey, std::string& secretKey);
+    
+    /**
+     * @brief Encapsulate shared secret using Kyber public key
+     * 
+     * Client-side operation: Uses the server's public key to generate
+     * a shared secret and ciphertext.
+     * 
+     * @param publicKey Server's Kyber public key (1184 bytes)
+     * @param ciphertext Output: Ciphertext to send to server (1088 bytes)
+     * @param sharedSecret Output: Derived shared secret (32 bytes)
+     * @return true on success, false on failure
+     */
+    static bool pqEncapsulate(const std::string& publicKey,
+                              std::string& ciphertext,
+                              std::string& sharedSecret);
+    
+    /**
+     * @brief Decapsulate ciphertext to recover shared secret
+     * 
+     * Server-side operation: Uses the secret key to recover the
+     * shared secret from the client's ciphertext.
+     * 
+     * @param ciphertext Ciphertext from client (1088 bytes)
+     * @param secretKey Server's Kyber secret key (2400 bytes)
+     * @param sharedSecret Output: Recovered shared secret (32 bytes)
+     * @return true on success, false on failure
+     */
+    static bool pqDecapsulate(const std::string& ciphertext,
+                              const std::string& secretKey,
+                              std::string& sharedSecret);
+    
+    /**
+     * @brief Derive AES-256 session key from PQC shared secret
+     * 
+     * Uses SHA3-256 to derive a suitable AES-256-GCM key from
+     * the Kyber shared secret.
+     * 
+     * AES_key = SHA3-256(shared_secret || context)
+     * 
+     * @param sharedSecret Kyber shared secret (32 bytes)
+     * @param context Domain separation string (default: "AES-256-GCM-KEY")
+     * @return 32-byte AES-256 key, or empty string on failure
+     */
+    static std::string pqDeriveSessionKey(const std::string& sharedSecret,
+                                          const std::string& context = "AES-256-GCM-KEY");
+    
+    /**
+     * @brief Complete PQC session key exchange (server-side)
+     * 
+     * Convenience function combining keypair generation,
+     * waiting for client ciphertext, and key derivation.
+     * 
+     * Usage Flow:
+     * 1. Server calls this to get keypair
+     * 2. Server sends publicKey to client
+     * 3. Client calls pqEncapsulate() with publicKey
+     * 4. Client sends ciphertext to server
+     * 5. Server calls pqDeriveSessionKeyFromCiphertext()
+     * 
+     * @param publicKey Output: Public key to send to client
+     * @param secretKey Output: Secret key to store securely
+     * @return true on success
+     */
+    static bool pqInitiateKeyExchange(std::string& publicKey, std::string& secretKey);
+    
+    /**
+     * @brief Complete PQC session key derivation from ciphertext
+     * 
+     * Server calls this after receiving client's ciphertext.
+     * 
+     * @param ciphertext Ciphertext from client
+     * @param secretKey Server's secret key
+     * @param sessionKey Output: Derived AES-256 session key
+     * @return true on success
+     */
+    static bool pqCompleteKeyExchange(const std::string& ciphertext,
+                                       const std::string& secretKey,
+                                       std::string& sessionKey);
+    
+    // ============================================
+    // PQC Hybrid Encryption (Kyber + AES-256-GCM)
+    // ============================================
+    
+    /**
+     * @brief Encrypt message using hybrid PQC + AES-256-GCM
+     * 
+     * Complete hybrid encryption flow:
+     * 1. Generate ephemeral Kyber keypair
+     * 2. Encapsulate to get shared secret
+     * 3. Derive AES-256 key from shared secret
+     * 4. Encrypt message with AES-256-GCM
+     * 
+     * Output format (Base64):
+     * [Kyber ciphertext (1088 bytes)][AES-GCM ciphertext]
+     * 
+     * @param plaintext Message to encrypt
+     * @param recipientPublicKey Recipient's Kyber public key
+     * @param aad Additional authenticated data (optional)
+     * @return Encrypted blob, or empty string on failure
+     */
+    static std::string pqHybridEncrypt(const std::string& plaintext,
+                                        const std::string& recipientPublicKey,
+                                        const std::string& aad = "");
+    
+    /**
+     * @brief Decrypt message using hybrid PQC + AES-256-GCM
+     * 
+     * Reverses hybrid encryption:
+     * 1. Extract Kyber ciphertext from blob
+     * 2. Decapsulate to recover shared secret
+     * 3. Derive AES-256 key
+     * 4. Decrypt and verify AES-GCM ciphertext
+     * 
+     * @param ciphertext_b64 Encrypted blob (Base64)
+     * @param recipientSecretKey Recipient's Kyber secret key
+     * @param aad Additional authenticated data (must match encryption)
+     * @return Decrypted plaintext, or empty string on failure
+     */
+    static std::string pqHybridDecrypt(const std::string& ciphertext_b64,
+                                        const std::string& recipientSecretKey,
+                                        const std::string& aad = "");
+    
+    // ============================================
+    // Post-Quantum Digital Signatures (Dilithium-III)
+    // ============================================
+    
+    /**
+     * @brief Dilithium-III public key size in bytes
+     */
+    static constexpr size_t PQ_SIGN_PUBLIC_KEY_SIZE = 1952;
+    
+    /**
+     * @brief Dilithium-III secret key size in bytes
+     */
+    static constexpr size_t PQ_SIGN_SECRET_KEY_SIZE = 4032;
+    
+    /**
+     * @brief Dilithium-III maximum signature size in bytes
+     */
+    static constexpr size_t PQ_SIGNATURE_SIZE = 3309;
+    
+    /**
+     * @brief Generate Dilithium-III keypair for signing
+     * 
+     * @param publicKey Output: Verification key (1952 bytes)
+     * @param secretKey Output: Signing key (4000 bytes)
+     * @return true on success
+     */
+    static bool pqSignGenerateKeyPair(std::string& publicKey, std::string& secretKey);
+    
+    /**
+     * @brief Sign message using Dilithium-III
+     * 
+     * @param message Message to sign
+     * @param secretKey Signing key (4000 bytes)
+     * @param signature Output: Signature (up to 3293 bytes)
+     * @return true on success
+     */
+    static bool pqSign(const std::string& message,
+                       const std::string& secretKey,
+                       std::string& signature);
+    
+    /**
+     * @brief Verify Dilithium-III signature
+     * 
+     * @param message Original message
+     * @param signature Signature to verify
+     * @param publicKey Verification key (1952 bytes)
+     * @return true if signature is valid
+     */
+    static bool pqVerify(const std::string& message,
+                         const std::string& signature,
+                         const std::string& publicKey);
+    
+    /**
+     * @brief Sign-then-encrypt using PQC
+     * 
+     * Signs message with Dilithium, then encrypts with hybrid PQC+AES.
+     * Provides both authenticity and confidentiality.
+     * 
+     * @param plaintext Message to sign and encrypt
+     * @param senderSigningKey Sender's Dilithium secret key
+     * @param recipientEncryptionKey Recipient's Kyber public key
+     * @return Signed and encrypted blob (Base64)
+     */
+    static std::string pqSignThenEncrypt(const std::string& plaintext,
+                                          const std::string& senderSigningKey,
+                                          const std::string& recipientEncryptionKey);
+    
+    /**
+     * @brief Decrypt-then-verify using PQC
+     * 
+     * Decrypts with hybrid PQC+AES, then verifies Dilithium signature.
+     * 
+     * @param ciphertext_b64 Signed and encrypted blob
+     * @param recipientDecryptionKey Recipient's Kyber secret key
+     * @param senderVerificationKey Sender's Dilithium public key
+     * @return Verified plaintext, or empty if verification fails
+     */
+    static std::string pqDecryptThenVerify(const std::string& ciphertext_b64,
+                                            const std::string& recipientDecryptionKey,
+                                            const std::string& senderVerificationKey);
+    
+    // ============================================
+    // SHA3-256 Hash Function
+    // ============================================
+    
+    /**
+     * @brief SHA3-256 hash function
+     * 
+     * Computes SHA3-256 hash (NIST FIPS 202).
+     * Used for PQC key derivation.
+     * 
+     * @param input Data to hash
+     * @return 64-character hexadecimal string (256 bits)
+     */
+    static std::string sha3_256(const std::string& input);
+    
+    /**
+     * @brief SHA3-256 with raw binary output
+     * 
+     * @param input Data to hash
+     * @return 32 raw bytes
+     */
+    static std::string sha3_256_raw(const std::string& input);
+    
+    // ============================================
+    // PQC Availability Check
+    // ============================================
+    
+    /**
+     * @brief Check if Kyber-768 is available
+     * @return true if PQC KEM is supported
+     */
+    static bool isPQCKEMAvailable();
+    
+    /**
+     * @brief Check if Dilithium-III is available
+     * @return true if PQC signatures are supported
+     */
+    static bool isPQCSignAvailable();
 };
 
 #endif

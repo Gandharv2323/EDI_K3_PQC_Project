@@ -57,7 +57,8 @@ module.exports = {
     new webpack.DefinePlugin({
       'process.env.REACT_APP_WS_URL': JSON.stringify(process.env.REACT_APP_WS_URL || 'ws://localhost:5000'),
       'process.env.REACT_APP_API_URL': JSON.stringify(process.env.REACT_APP_API_URL || 'http://localhost:5000'),
-      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development')
+      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+      'process.env.REACT_APP_ENABLE_PRESENCE': JSON.stringify(process.env.REACT_APP_ENABLE_PRESENCE || 'false')
     })
   ],
   devServer: {

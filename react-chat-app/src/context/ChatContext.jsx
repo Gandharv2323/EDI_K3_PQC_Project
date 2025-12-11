@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useMemo } from 'react'
 import { useWebSocket } from './WebSocketContext'
 
 const ChatContext = createContext(null)
@@ -12,7 +12,7 @@ export const useChat = () => {
 }
 
 export const ChatProvider = ({ children }) => {
-  const { messages: wsMessages } = useWebSocket()
+  const { messages: wsMessages, presenceMap, presenceEnabled, getPresence } = useWebSocket()
   const [selectedContact, setSelectedContact] = useState(null)
   const [privateMessages, setPrivateMessages] = useState({})
   const [broadcastMessages, setBroadcastMessages] = useState([])
@@ -317,18 +317,42 @@ export const ChatProvider = ({ children }) => {
     }
   }
 
+  // ============================================================================
+  // PRESENCE: Merge contacts with presence data
+  // ============================================================================
+  const contactsWithPresence = useMemo(() => {
+    if (!presenceEnabled) return contacts
+    
+    return contacts.map(contact => {
+      // AI Assistant is always online
+      if (contact.isAI) return contact
+      
+      const presence = getPresence(contact.username)
+      return {
+        ...contact,
+        online: presence.status === 'online',
+        idle: presence.status === 'idle',
+        lastSeen: presence.lastSeen || contact.lastSeen,
+        presenceStatus: presence.status // 'online', 'offline', 'idle', 'unknown'
+      }
+    })
+  }, [contacts, presenceMap, presenceEnabled, getPresence])
+
   const value = {
     selectedContact,
     setSelectedContact,
     privateMessages,
     broadcastMessages,
-    contacts,
+    contacts: contactsWithPresence, // Use contacts with presence data
     addPrivateMessage,
     addBroadcastMessage,
     loadChatHistory,
     loadBroadcastHistory,
     markAsRead,
-    refreshContacts: fetchUsers
+    refreshContacts: fetchUsers,
+    // Presence helpers
+    presenceEnabled,
+    getPresence
   }
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>

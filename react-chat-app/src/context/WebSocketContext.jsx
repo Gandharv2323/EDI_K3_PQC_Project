@@ -1,7 +1,19 @@
-import { createContext, useContext, useEffect, useState, useRef } from 'react'
+import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react'
 import { encryptAES_GCM, decryptAES_GCM } from '../utils/crypto'
-
+// real time communication via websockets with encryption, presence, and PQC key exchange
 const WebSocketContext = createContext(null)
+
+
+// (Lines 50-70) FRONTEND → BACKEND CONNECTION
+
+
+// ============================================================================
+// PRESENCE CONFIGURATION
+// ============================================================================
+// Feature toggle - reads from environment variable at build time
+const ENABLE_PRESENCE = process.env.REACT_APP_ENABLE_PRESENCE === 'true'
+const PRESENCE_HEARTBEAT_INTERVAL = 20000 // 20 seconds
+const PRESENCE_IDLE_TIMEOUT = 300000 // 5 minutes
 
 export const useWebSocket = () => {
   const context = useContext(WebSocketContext)
@@ -17,6 +29,7 @@ export const WebSocketProvider = ({ children }) => {
   const [messages, setMessages] = useState([])
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [encryptionError, setEncryptionError] = useState(null) // Track encryption failures
+  const [presenceMap, setPresenceMap] = useState({}) // Presence state for all users
   const wsRef = useRef(null)
   const reconnectTimeoutRef = useRef(null)
   const reconnectAttempts = useRef(0)
@@ -26,14 +39,25 @@ export const WebSocketProvider = ({ children }) => {
   const isAuthenticatedRef = useRef(false) // Ref to avoid stale closure in useEffect
   const decryptionFailureCount = useRef(0) // Track consecutive decryption failures
   const MAX_DECRYPTION_FAILURES = 3 // Threshold before invalidating session
+  
+  // Presence refs
+  const presenceHeartbeatRef = useRef(null)
+  const presenceIdleTimerRef = useRef(null)
+  const lastActivityRef = useRef(Date.now())
 
   useEffect(() => {
     let isSubscribed = true
-    
+
+    //FRONTEND → BACKEND CONNECTION
+
     const connectWebSocket = () => {
       if (!isSubscribed) return
       // WebSocket URL from environment variable (supports ws:// and wss://)
       // DefinePlugin replaces process.env.REACT_APP_WS_URL at build time
+      
+      //Connection Code 3️ REACT FRONTEND (Browser)
+
+      
       const wsUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:5000'
       console.log('[WS] Connecting to:', wsUrl)
 
@@ -45,6 +69,8 @@ export const WebSocketProvider = ({ children }) => {
         setIsConnected(true)
         setWs(socket)
         reconnectAttempts.current = 0
+        
+//FRONTEND → BACKEND CONNECTION
         
         // SECURITY: Do NOT send credentials here - they would be transmitted in plaintext
         // Auto-login will be triggered after receiving the session key and enabling encryption
@@ -146,6 +172,126 @@ export const WebSocketProvider = ({ children }) => {
           return // Don't process as regular message
         }
         
+        // ====================================================================
+        // KYBER POST-QUANTUM KEY EXCHANGE (OPTIONAL)
+        // ====================================================================
+        // Handle Kyber public key from server
+        if (data.startsWith('KYBER_PUBLIC_KEY:')) {
+          console.log('[KYBER] Received server public key for PQC exchange')
+          console.log('[KYBER] Public key length:', data.length, 'chars')
+          
+          // Dynamically import Kyber module
+          import('../utils/kyber.js')
+            .then(async ({ browserKyber }) => {
+              console.log('[KYBER] Browser module imported')
+              
+              // Enable and initialize Kyber
+              const initialized = await browserKyber.enable()
+              console.log('[KYBER] Initialization result:', initialized)
+              
+              if (!initialized) {
+                console.log('[KYBER] Browser module not available, skipping PQC')
+                return
+              }
+              
+              // Parse server's public key
+              const serverPubKeyB64 = data.substring('KYBER_PUBLIC_KEY:'.length).trim()
+              console.log('[KYBER] Parsed public key (base64 length):', serverPubKeyB64.length)
+              
+              // Encapsulate to create shared secret
+              console.log('[KYBER] Calling encapsulate...')
+              const result = await browserKyber.encapsulate(serverPubKeyB64)
+              console.log('[KYBER] Encapsulate result:', result ? 'success' : 'failed')
+              
+              if (!result) {
+                console.error('[KYBER] Encapsulation failed - result is null')
+                return
+              }
+              
+              // Store the shared secret for later application (when KYBER_COMPLETE is received)
+              window._kyberPendingSecret = result.sharedSecret
+              console.log('[KYBER] Stored pending secret, ciphertext length:', result.ciphertextBase64.length)
+              
+              // Send ciphertext back to server
+              if (socket.readyState === WebSocket.OPEN) {
+                socket.send(`KYBER_CIPHERTEXT:${result.ciphertextBase64}`)
+                console.log('[KYBER] ✓ Sent ciphertext to server')
+                console.log('[KYBER] Waiting for server confirmation before applying hybrid key...')
+              } else {
+                console.error('[KYBER] Cannot send ciphertext - socket not open')
+              }
+            })
+            .catch(err => {
+              console.error('[KYBER] Module error:', err.message, err.stack)
+              // Non-fatal - continue with classical encryption
+            })
+          
+          return // Don't process as regular message
+        }
+        
+        // Handle Kyber exchange completion notification
+        if (data.startsWith('KYBER_COMPLETE:')) {
+          const success = data.substring('KYBER_COMPLETE:'.length).trim() === 'true'
+          if (success) {
+            console.log('[KYBER] ✓ Post-quantum key exchange verified!')
+            console.log('[KYBER] Kyber-768 shared secret established')
+            console.log('[KYBER] Note: Using classical AES-256-GCM for this session')
+            // Clear the pending secret - we verified Kyber works but won't modify keys mid-session
+            delete window._kyberPendingSecret
+          } else {
+            console.log('[KYBER] PQC exchange failed, using classical encryption')
+            delete window._kyberPendingSecret
+          }
+          return // Don't process as regular message
+        }
+        
+        // ====================================================================
+        // PRESENCE HANDLING
+        // ====================================================================
+        // Handle presence updates from server
+        if (data.startsWith('PRESENCE:')) {
+          if (!ENABLE_PRESENCE) return // Silently ignore if disabled
+          
+          try {
+            const presenceData = JSON.parse(data.substring('PRESENCE:'.length))
+            const { action, userId, timestamp } = presenceData
+            
+            console.log(`[PRESENCE] ${userId} is now ${action}`)
+            
+            setPresenceMap(prev => ({
+              ...prev,
+              [userId]: {
+                userId,
+                status: action.toLowerCase(),
+                lastSeen: timestamp
+              }
+            }))
+          } catch (err) {
+            console.error('[PRESENCE] Failed to parse presence update:', err.message)
+          }
+          return // Don't process as regular message
+        }
+        
+        // Handle presence snapshot from server (sent on connect)
+        if (data.startsWith('PRESENCE_SNAPSHOT:')) {
+          if (!ENABLE_PRESENCE) return // Silently ignore if disabled
+          
+          try {
+            const snapshot = JSON.parse(data.substring('PRESENCE_SNAPSHOT:'.length))
+            console.log('[PRESENCE] Received snapshot with', snapshot.length, 'entries')
+            
+            const newPresenceMap = {}
+            snapshot.forEach(entry => {
+              newPresenceMap[entry.userId] = entry
+            })
+            
+            setPresenceMap(newPresenceMap)
+          } catch (err) {
+            console.error('[PRESENCE] Failed to parse presence snapshot:', err.message)
+          }
+          return // Don't process as regular message
+        }
+        
         // Decrypt message if encryption is enabled
         if (encryptionEnabled.current && wsSessionKey.current) {
           decryptAES_GCM(data, wsSessionKey.current)
@@ -189,6 +335,20 @@ export const WebSocketProvider = ({ children }) => {
         }
       }
       
+      // Handle decryption failures - invalidate session after too many failures
+      function handleDecryptionFailure(errorMessage) {
+        const maxFailures = 5
+        console.warn(`[WS_CRYPTO] Decryption failure ${decryptionFailureCount.current}/${maxFailures}: ${errorMessage}`)
+        
+        if (decryptionFailureCount.current >= maxFailures) {
+          console.error('[WS_CRYPTO] Too many decryption failures - session may be compromised')
+          console.error('[WS_CRYPTO] Consider re-establishing connection')
+          
+          // Don't automatically close - just warn
+          setEncryptionError(`Multiple decryption failures (${decryptionFailureCount.current})`)
+        }
+      }
+      
       function processMessage(data) {
         console.log('[WS] Received:', data)
         
@@ -197,6 +357,25 @@ export const WebSocketProvider = ({ children }) => {
           setIsAuthenticated(true)
           isAuthenticatedRef.current = true // Update ref to avoid stale closure
           console.log('[WS] 🔐 Authentication confirmed')
+          
+          // ============================================================
+          // PRESENCE: Start heartbeat and send ONLINE status
+          // ============================================================
+          if (ENABLE_PRESENCE) {
+            const currentUser = sessionStorage.getItem('currentUser')
+            if (currentUser) {
+              // Send initial ONLINE status
+              sendPresence('ONLINE')
+              
+              // Start heartbeat interval
+              startPresenceHeartbeat()
+              
+              // Setup idle detection
+              setupIdleDetection()
+              
+              console.log('[PRESENCE] ✓ Presence tracking started')
+            }
+          }
         }
         
         // Detect timeout from server
@@ -204,9 +383,95 @@ export const WebSocketProvider = ({ children }) => {
           console.log('[WS] ⏱️ Server reported authentication timeout')
           setIsAuthenticated(false)
           isAuthenticatedRef.current = false // Update ref to avoid stale closure
+          
+          // Stop presence tracking
+          stopPresenceTracking()
         }
         
         setMessages(prev => [...prev, { data, timestamp: new Date() }])
+      }
+      
+      // ============================================================
+      // PRESENCE HELPER FUNCTIONS
+      // ============================================================
+      function sendPresence(action) {
+        if (!ENABLE_PRESENCE || !socket || socket.readyState !== WebSocket.OPEN) return
+        
+        const currentUser = sessionStorage.getItem('currentUser')
+        if (!currentUser) return
+        
+        const presenceEvent = {
+          type: 'PRESENCE',
+          action,
+          userId: currentUser,
+          timestamp: new Date().toISOString()
+        }
+        
+        socket.send(`PRESENCE:${JSON.stringify(presenceEvent)}`)
+        console.log(`[PRESENCE] Sent ${action}`)
+      }
+      
+      function startPresenceHeartbeat() {
+        // Clear any existing heartbeat
+        if (presenceHeartbeatRef.current) {
+          clearInterval(presenceHeartbeatRef.current)
+        }
+        
+        presenceHeartbeatRef.current = setInterval(() => {
+          sendPresence('HEARTBEAT')
+        }, PRESENCE_HEARTBEAT_INTERVAL)
+      }
+      
+      function setupIdleDetection() {
+        // Track user activity
+        const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart']
+        
+        const handleActivity = () => {
+          lastActivityRef.current = Date.now()
+          
+          // If we were idle, send ONLINE again
+          const currentUser = sessionStorage.getItem('currentUser')
+          if (currentUser) {
+            const currentPresence = presenceMap[currentUser]
+            if (currentPresence?.status === 'idle') {
+              sendPresence('ONLINE')
+            }
+          }
+        }
+        
+        activityEvents.forEach(event => {
+          window.addEventListener(event, handleActivity, { passive: true })
+        })
+        
+        // Check for idle periodically
+        presenceIdleTimerRef.current = setInterval(() => {
+          const elapsed = Date.now() - lastActivityRef.current
+          if (elapsed > PRESENCE_IDLE_TIMEOUT) {
+            const currentUser = sessionStorage.getItem('currentUser')
+            if (currentUser) {
+              const currentPresence = presenceMap[currentUser]
+              if (currentPresence?.status !== 'idle') {
+                sendPresence('IDLE')
+              }
+            }
+          }
+        }, 60000) // Check every minute
+        
+        // Send OFFLINE on page unload (best effort)
+        window.addEventListener('beforeunload', () => {
+          sendPresence('OFFLINE')
+        })
+      }
+      
+      function stopPresenceTracking() {
+        if (presenceHeartbeatRef.current) {
+          clearInterval(presenceHeartbeatRef.current)
+          presenceHeartbeatRef.current = null
+        }
+        if (presenceIdleTimerRef.current) {
+          clearInterval(presenceIdleTimerRef.current)
+          presenceIdleTimerRef.current = null
+        }
       }
 
       socket.onerror = (error) => {
@@ -231,6 +496,9 @@ export const WebSocketProvider = ({ children }) => {
         encryptionEnabled.current = false
         decryptionFailureCount.current = 0  // Reset failure counter on disconnect
         console.log('[WS_CRYPTO] Cleared encryption state on disconnect')
+        
+        // Stop presence tracking on disconnect
+        stopPresenceTracking()
 
         // Don't reconnect if:
         // 1. Already authenticated (prevents duplicate login errors)
@@ -277,6 +545,15 @@ export const WebSocketProvider = ({ children }) => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
       }
+      
+      // Stop presence tracking on cleanup
+      if (presenceHeartbeatRef.current) {
+        clearInterval(presenceHeartbeatRef.current)
+      }
+      if (presenceIdleTimerRef.current) {
+        clearInterval(presenceIdleTimerRef.current)
+      }
+      
       if (wsRef.current) {
         console.log('[WS] Cleaning up WebSocket connection')
         wsRef.current.close(1000, 'Component unmounting')
@@ -355,7 +632,11 @@ export const WebSocketProvider = ({ children }) => {
     sendMessage,
     clearMessages: () => setMessages([]),
     encryptionError,
-    clearEncryptionError: () => setEncryptionError(null)
+    clearEncryptionError: () => setEncryptionError(null),
+    // Presence
+    presenceMap,
+    presenceEnabled: ENABLE_PRESENCE,
+    getPresence: (userId) => presenceMap[userId] || { status: 'unknown', lastSeen: null }
   }
 
   return (
