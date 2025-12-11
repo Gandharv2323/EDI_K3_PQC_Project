@@ -1,8 +1,13 @@
+/* ============================================================================
+   MESSENGER-STYLE MESSAGE BUBBLES
+   ============================================================================ */
+
 .message {
   display: flex;
   flex-direction: column;
-  max-width: 70%;
-  animation: fadeIn 0.3s ease-out;
+  max-width: 65%;
+  animation: fadeIn 0.2s ease-out;
+  margin: 2px 0;
 }
 
 .message.sent {
@@ -16,70 +21,73 @@
 }
 
 .message.first {
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
+/* Sender Name for Received Messages */
 .message-sender {
-  color: var(--primary-color);
+  color: var(--text-secondary);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   margin-bottom: 4px;
   padding: 0 12px;
 }
 
+/* Message Bubble - Messenger Style */
 .message-bubble {
-  background: var(--bg-card);
-  padding: 10px 14px;
-  border-radius: 12px;
+  padding: 8px 14px;
+  border-radius: 18px;
   position: relative;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
+/* Sent Message - Blue Gradient */
 .message.sent .message-bubble {
-  background: var(--primary-color);
-  color: #000;
+  background: linear-gradient(135deg, #0084FF 0%, #0099FF 100%);
+  color: #fff;
   border-bottom-right-radius: 4px;
 }
 
+/* Received Message - Dark Gray */
 .message.received .message-bubble {
-  background: var(--bg-card);
+  background: var(--bg-message-received, #303030);
+  color: var(--text-primary);
   border-bottom-left-radius: 4px;
 }
 
 .message-bubble:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transform: scale(1.01);
 }
 
+/* Message Text */
 .message-text {
-  color: inherit;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.4;
   word-wrap: break-word;
-  margin-bottom: 4px;
 }
 
 .message.sent .message-text {
-  color: #000;
+  color: #fff;
 }
 
 .message.received .message-text {
   color: var(--text-primary);
 }
 
+/* File Message */
 .message-file {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
   margin-bottom: 4px;
 }
 
 .message-file i {
-  font-size: 20px;
+  font-size: 18px;
 }
 
 .message-file span {
@@ -87,12 +95,19 @@
   font-weight: 500;
 }
 
+/* Message Footer (Time & Status) */
 .message-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  margin-top: 2px;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.message:hover .message-footer {
+  opacity: 1;
 }
 
 .message-time {
@@ -101,13 +116,14 @@
 }
 
 .message.sent .message-time {
-  color: #000;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .message.received .message-time {
-  color: var(--text-secondary);
+  color: var(--text-muted);
 }
 
+/* Read Status */
 .message-status {
   display: flex;
   align-items: center;
@@ -116,13 +132,14 @@
 }
 
 .message-status i {
-  color: rgba(0, 0, 0, 0.6);
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .message-status .read-status i {
-  color: #0084ff;
+  color: #fff;
 }
 
+/* Context Menu */
 .context-menu-overlay {
   position: fixed;
   top: 0;
@@ -136,12 +153,12 @@
   position: fixed;
   background: var(--bg-card);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
   z-index: 999;
-  min-width: 150px;
+  min-width: 160px;
   overflow: hidden;
-  animation: fadeIn 0.2s ease-out;
+  animation: fadeIn 0.15s ease-out;
 }
 
 .context-menu button {
@@ -152,15 +169,15 @@
   padding: 12px 16px;
   text-align: left;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   font-size: 14px;
 }
 
 .context-menu button:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-hover);
 }
 
 .context-menu button.danger {
@@ -174,11 +191,13 @@
 .context-menu button i {
   width: 16px;
   text-align: center;
+  font-size: 14px;
 }
 
+/* Responsive */
 @media (max-width: 768px) {
   .message {
-    max-width: 85%;
+    max-width: 80%;
   }
 
   .message-bubble {
@@ -186,6 +205,6 @@
   }
 
   .message-text {
-    font-size: 13px;
+    font-size: 14px;
   }
 }

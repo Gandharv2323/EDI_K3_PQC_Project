@@ -24,10 +24,10 @@ const Login = () => {
     // Get the most recent message
     const latestMessage = messages[messages.length - 1]
     if (!latestMessage) return
-    
+
     const data = latestMessage.data || ''
     console.log('[LOGIN] Decrypted message received:', data)
-    
+
     // Skip messages that are just prompts or not authentication responses
     // Only process messages that indicate success or failure
     if (data.includes('Authentication successful') || data.includes('Welcome')) {
@@ -35,7 +35,7 @@ const Login = () => {
       sessionStorage.setItem('currentUser', username)
       sessionStorage.setItem('userPassword', password)
       setLoading(false)
-      
+
       // Refresh contacts to include any new users
       if (refreshContacts) {
         refreshContacts().then(() => {
@@ -63,7 +63,7 @@ const Login = () => {
   // Fallback timeout
   useEffect(() => {
     if (!loading) return
-    
+
     const timeoutId = setTimeout(() => {
       if (loading) {
         console.log('[LOGIN] ⏱️ Client-side timeout after 10s')
@@ -93,7 +93,7 @@ const Login = () => {
       setLoading(false)
       return
     }
-    
+
     console.log('[LOGIN] Login request sent, waiting for response...')
     // The useEffect hook above will handle the response
   }
@@ -105,7 +105,7 @@ const Login = () => {
       'bob': 'bob456',
       'charlie': 'charlie789'
     }
-    
+
     sessionStorage.setItem('currentUser', testUsername)
     sessionStorage.setItem('userPassword', testPasswords[testUsername] || 'password123')
     navigate('/chat/private')
@@ -117,8 +117,8 @@ const Login = () => {
       <div className="auth-card animate-scale-in glow-card">
         <div className="auth-header">
           <div className="auth-logo-animation" style={{ width: '100px', height: '100px', margin: '0 auto 1rem' }}>
-            <Lottie 
-              animationData={loginAnimation} 
+            <Lottie
+              animationData={loginAnimation}
               loop={true}
               style={{ width: '100%', height: '100%', filter: 'drop-shadow(0 0 20px rgba(32, 178, 255, 0.4))' }}
             />
@@ -159,7 +159,7 @@ const Login = () => {
             {loading ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center' }}>
                 <div style={{ width: '24px', height: '24px' }}>
-                  <LottieAnimation 
+                  <LottieAnimation
                     animationData={loadingAnimation}
                     style={{ width: '100%', height: '100%' }}
                   />
@@ -184,15 +184,15 @@ const Login = () => {
           </div>
         </form>
 
-        {/* <div className="test-accounts">
+        <div className="test-accounts">
           <h4>
             <i className="fas fa-info-circle"></i>
-            Test Accounts
+            Quick Login (Dev Mode)
           </h4>
           <div className="test-account">
             <div className="test-account-info">
               <span className="username">alice</span>
-              <span className="password">alice123</span>
+              <span className="password">Click to enter chat</span>
             </div>
             <button
               className="btn-use"
@@ -205,7 +205,7 @@ const Login = () => {
           <div className="test-account">
             <div className="test-account-info">
               <span className="username">bob</span>
-              <span className="password">bob456</span>
+              <span className="password">Click to enter chat</span>
             </div>
             <button
               className="btn-use"
@@ -215,20 +215,7 @@ const Login = () => {
               Use
             </button>
           </div>
-          <div className="test-account">
-            <div className="test-account-info">
-              <span className="username">charlie</span>
-              <span className="password">charlie789</span>
-            </div>
-            <button
-              className="btn-use"
-              onClick={() => handleTestLogin('charlie')}
-              type="button"
-            >
-              Use
-            </button>
-          </div>
-        </div> */}
+        </div>
       </div>
     </div>
   )
